@@ -10,6 +10,7 @@ const categoriesController = require('../controllers/admin/categories.controller
 const dashboardController = require('../controllers/admin/dashboard.controller');
 const contributionsController = require('../controllers/admin/contributions.controller');
 const audioController = require('../controllers/admin/audio.controller');
+const adsController = require('../controllers/admin/ads.controller');
 
 const { loginSchema, refreshSchema } = require('../validators/admin.validators');
 const {
@@ -29,6 +30,12 @@ const {
   rejectContributionSchema,
   approveContributionSchema,
 } = require('../validators/contribution.validators');
+const {
+  createAdSchema,
+  updateAdSchema,
+  idParamSchema: adIdParamSchema,
+  listAdsQuerySchema,
+} = require('../validators/ad.validators');
 const { adminAudioUploadQuery } = require('../validators/common');
 const { audioUpload } = require('../middleware/upload');
 
@@ -104,6 +111,27 @@ router.patch(
   requireRole('SUPER_ADMIN', 'ADMIN'),
   validate({ params: idParamSchema, body: updateCategorySchema }),
   categoriesController.updateCategory
+);
+
+router.get('/ads', validate({ query: listAdsQuerySchema }), adsController.list);
+router.get('/ads/:id', validate({ params: adIdParamSchema }), adsController.get);
+router.post(
+  '/ads',
+  requireRole('SUPER_ADMIN', 'ADMIN'),
+  validate({ body: createAdSchema }),
+  adsController.create
+);
+router.patch(
+  '/ads/:id',
+  requireRole('SUPER_ADMIN', 'ADMIN'),
+  validate({ params: adIdParamSchema, body: updateAdSchema }),
+  adsController.update
+);
+router.delete(
+  '/ads/:id',
+  requireRole('SUPER_ADMIN', 'ADMIN'),
+  validate({ params: adIdParamSchema }),
+  adsController.archive
 );
 
 // ---- Audio (admin uploads) ----
