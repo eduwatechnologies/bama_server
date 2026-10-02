@@ -18,6 +18,7 @@ const personalAdSchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true, maxlength: 100 },
     body: { type: String, required: true, trim: true, maxlength: 500 },
     imageUrl: { type: String, trim: true, maxlength: 2000 },
+    imageUrls: { type: [String], default: undefined },
     targetUrl: { type: String, trim: true, maxlength: 2000 },
     ctaText: { type: String, trim: true, maxlength: 30 },
   },

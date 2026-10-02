@@ -50,11 +50,12 @@ app.use(
 
 app.get('/health', (req, res) => success(res, { status: 'ok', uptime: process.uptime() }));
 
-// Dev-only: serves audio saved by the local storage driver. When
+// Dev-only: serves audio and images saved by the local storage driver. When
 // STORAGE_DRIVER=s3 or STORAGE_DRIVER=cloudinary, files are served
-// directly from the bucket/CDN and this route is simply unused.
+// directly from the bucket/CDN and these routes are simply unused.
 if (storage.driverName === 'local') {
   app.use('/uploads/audio', express.static(storage.UPLOAD_DIR));
+  app.use('/uploads/images', express.static(storage.IMAGE_UPLOAD_DIR));
 }
 
 app.use('/api/v1', contentRoutes);

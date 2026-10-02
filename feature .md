@@ -568,7 +568,8 @@ POST   /api/v1/contributions/:id/audio
 GET    /api/v1/contributions/:id
 ```
 
-Mobile contribution endpoints should apply strong rate limits.
+Mobile contribution endpoints should apply strong rate limits. The limiter belongs on those routes
+specifically — router-level middleware would charge every unrelated request in the API against it.
 
 ---
 
@@ -594,6 +595,7 @@ PATCH  /api/v1/admin/phrases/:id
 GET    /api/v1/admin/contributions
 GET    /api/v1/admin/contributions/:id
 PATCH  /api/v1/admin/contributions/:id/approve
+PATCH  /api/v1/admin/contributions/:id/resolve
 PATCH  /api/v1/admin/contributions/:id/reject
 
 GET    /api/v1/admin/categories

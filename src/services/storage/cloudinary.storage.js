@@ -71,8 +71,9 @@ function safePrefix(prefix) {
  * would end up with a double extension like ".m4a.mp4" and get
  * Content-Type: video/mp4 on the response.
  */
-function buildPublicId(prefix) {
-  const folder = env.storage.cloudinary.folder;
+function buildPublicId(prefix, kind) {
+  const folder =
+    kind === 'image' ? env.storage.cloudinary.imageFolder : env.storage.cloudinary.folder;
   const cleanPrefix = safePrefix(prefix);
   const id = crypto.randomUUID();
   const path = cleanPrefix ? `${folder}/${cleanPrefix}` : folder;
@@ -107,17 +108,19 @@ function forceAudioDeliveryUrl(secureUrl, mimeType) {
 
 /**
  * @param {Buffer} buffer
- * @param {{ mimeType: string, prefix?: string }} opts
+ * @param {{ mimeType: string, prefix?: string, kind?: 'audio' | 'image' }} opts
  * @returns {Promise<{ storageKey: string, url: string }>}
  */
-async function upload(buffer, { mimeType, prefix = 'contributions' }) {
+async function upload(buffer, { mimeType, prefix = 'contributions', kind = 'audio' }) {
   const client = getClient();
-  const publicId = buildPublicId(prefix);
+  const publicId = buildPublicId(prefix, kind);
+  // Audio lives in Cloudinary's `video` pipeline; images are uploaded as images.
+  const resourceType = kind === 'image' ? 'image' : 'video';
 
   return new Promise((resolve, reject) => {
     const stream = client.uploader.upload_stream(
       {
-        resource_type: 'video',
+        resource_type: resourceType,
         public_id: publicId,
         overwrite: false,
         invalidate: false,
@@ -129,7 +132,7 @@ async function upload(buffer, { mimeType, prefix = 'contributions' }) {
         }
         resolve({
           storageKey: result.public_id,
-          url: forceAudioDeliveryUrl(result.secure_url, mimeType),
+          url: resourceType === 'image' ? result.secure_url : forceAudioDeliveryUrl(result.secure_url, mimeType),
         });
       },
     );
@@ -137,12 +140,13 @@ async function upload(buffer, { mimeType, prefix = 'contributions' }) {
   });
 }
 
-async function remove(storageKey) {
+async function remove(storageKey, kind = 'audio') {
   if (!storageKey) return;
   const client = getClient();
+  const resourceType = kind === 'image' ? 'image' : 'video';
   try {
     await client.uploader.destroy(storageKey, {
-      resource_type: 'video',
+      resource_type: resourceType,
       invalidate: false,
     });
   } catch (err) {

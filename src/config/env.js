@@ -27,11 +27,20 @@ const env = {
 
   storage: {
     driver: process.env.STORAGE_DRIVER || 'local',
+    local: {
+      audioDir: process.env.LOCAL_UPLOAD_DIR || '',
+      audioPublicUrl: process.env.LOCAL_UPLOAD_PUBLIC_URL || '',
+      imageDir: process.env.LOCAL_IMAGE_UPLOAD_DIR || '',
+      imagePublicUrl: process.env.LOCAL_IMAGE_UPLOAD_PUBLIC_URL || '',
+    },
     cloudinary: {
       cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
       apiKey: process.env.CLOUDINARY_API_KEY || '',
       apiSecret: process.env.CLOUDINARY_API_SECRET || '',
       folder: process.env.CLOUDINARY_FOLDER || 'hausabridge/audio',
+      imageFolder:
+        process.env.CLOUDINARY_IMAGE_FOLDER ||
+        (process.env.CLOUDINARY_FOLDER || 'hausabridge/audio').replace(/\/audio$/, '/images'),
       secureDelivery: (process.env.CLOUDINARY_SECURE_DELIVERY || 'true') !== 'false',
     },
   },

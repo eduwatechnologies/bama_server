@@ -37,8 +37,25 @@ function publicFilter({ type, placement }) {
   return filter;
 }
 
+function normalizePersonal(source) {
+  if (!source) return undefined;
+  const personal = { ...(source.toObject ? source.toObject() : source) };
+  const imageUrls = (personal.imageUrls ?? []).filter(Boolean);
+  if (imageUrls.length === 0 && personal.imageUrl) {
+    imageUrls.push(personal.imageUrl);
+  }
+  if (imageUrls.length > 0) {
+    personal.imageUrl = imageUrls[0];
+    personal.imageUrls = imageUrls;
+  } else {
+    delete personal.imageUrls;
+  }
+  return personal;
+}
+
 function toPublicAd(ad) {
   const source = ad.toObject();
+  const personal = normalizePersonal(source.personal);
   return {
     _id: source._id.toString(),
     name: source.name,
@@ -49,7 +66,7 @@ function toPublicAd(ad) {
     startsAt: source.startsAt,
     endsAt: source.endsAt,
     ...(source.google ? { google: source.google } : {}),
-    ...(source.personal ? { personal: source.personal } : {}),
+    ...(personal ? { personal } : {}),
     createdAt: source.createdAt,
     updatedAt: source.updatedAt,
   };
@@ -94,11 +111,13 @@ async function getAd(id) {
 
 async function createAd(data, adminId) {
   assertProviderPayload(data);
-  const ad = await Ad.create({
+  const payload = {
     ...data,
+    ...(data.personal ? { personal: normalizePersonal(data.personal) } : {}),
     createdBy: adminId,
     updatedBy: adminId,
-  });
+  };
+  const ad = await Ad.create(payload);
   return getAd(ad._id);
 }
 
@@ -117,7 +136,10 @@ async function updateAd(id, data, adminId) {
     updates.google = { ...(ad.google?.toObject?.() ?? {}), ...data.google };
   }
   if (data.personal) {
-    updates.personal = { ...(ad.personal?.toObject?.() ?? {}), ...data.personal };
+    updates.personal = normalizePersonal({
+      ...(ad.personal?.toObject?.() ?? {}),
+      ...data.personal,
+    });
   }
 
   assertProviderPayload({ ...ad.toObject(), ...updates, type: ad.type });

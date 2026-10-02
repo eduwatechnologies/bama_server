@@ -10,6 +10,7 @@ const categoriesController = require('../controllers/admin/categories.controller
 const dashboardController = require('../controllers/admin/dashboard.controller');
 const contributionsController = require('../controllers/admin/contributions.controller');
 const audioController = require('../controllers/admin/audio.controller');
+const imagesController = require('../controllers/admin/images.controller');
 const adsController = require('../controllers/admin/ads.controller');
 
 const { loginSchema, refreshSchema } = require('../validators/admin.validators');
@@ -29,6 +30,7 @@ const {
   listContributionsQuerySchema,
   rejectContributionSchema,
   approveContributionSchema,
+  resolveContributionSchema,
 } = require('../validators/contribution.validators');
 const {
   createAdSchema,
@@ -37,7 +39,7 @@ const {
   listAdsQuerySchema,
 } = require('../validators/ad.validators');
 const { adminAudioUploadQuery } = require('../validators/common');
-const { audioUpload } = require('../middleware/upload');
+const { audioUpload, imageUpload } = require('../middleware/upload');
 
 const router = express.Router();
 
@@ -45,8 +47,13 @@ const router = express.Router();
 router.post('/auth/login', loginLimiter, validate({ body: loginSchema }), authController.login);
 router.post('/auth/refresh', loginLimiter, validate({ body: refreshSchema }), authController.refresh);
 
-// Everything below requires a valid admin access token.
-router.use(adminLimiter, requireAdminAuth);
+// Everything below requires a valid admin access token. The limiter only
+// counts requests that actually present a token, so public traffic falling
+// through this router cannot starve a real admin session.
+const authenticatedApiLimiter = (req, res, next) =>
+  req.headers.authorization ? adminLimiter(req, res, next) : next();
+
+router.use(authenticatedApiLimiter, requireAdminAuth);
 
 router.post('/auth/logout', validate({ body: refreshSchema }), authController.logout);
 
@@ -143,6 +150,14 @@ router.post(
   audioController.uploadAudio
 );
 
+// ---- Images (admin uploads, e.g. personal ad creatives) ----
+router.post(
+  '/images/upload',
+  requireRole('SUPER_ADMIN', 'ADMIN'),
+  imageUpload,
+  imagesController.uploadImage
+);
+
 // ---- Contributions (moderation) ----
 // MODERATOR is the primary role for this queue; ADMIN/SUPER_ADMIN can also review.
 router.get(
@@ -172,6 +187,12 @@ router.patch(
   requireRole('SUPER_ADMIN', 'ADMIN', 'MODERATOR'),
   validate({ params: contributionIdParamSchema, body: rejectContributionSchema }),
   contributionsController.reject
+);
+router.patch(
+  '/contributions/:id/resolve',
+  requireRole('SUPER_ADMIN', 'ADMIN', 'MODERATOR'),
+  validate({ params: contributionIdParamSchema, body: resolveContributionSchema }),
+  contributionsController.resolve
 );
 
 module.exports = router;

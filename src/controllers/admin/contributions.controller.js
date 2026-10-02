@@ -4,8 +4,16 @@ const contributionService = require('../../services/contribution.service');
 
 // GET /api/v1/admin/contributions
 const list = asyncHandler(async (req, res) => {
-  const { status, type, page, limit } = req.query;
-  const result = await contributionService.listContributions({ status, type, page, limit });
+  const { status, type, reportKind, issueCategory, actionable, page, limit } = req.query;
+  const result = await contributionService.listContributions({
+    status,
+    type,
+    reportKind,
+    issueCategory,
+    actionable,
+    page,
+    limit,
+  });
   return success(res, result, 200, { page, limit });
 });
 
@@ -41,4 +49,14 @@ const reject = asyncHandler(async (req, res) => {
   return success(res, contribution);
 });
 
-module.exports = { list, getById, markUnderReview, approve, reject };
+// PATCH /api/v1/admin/contributions/:id/resolve
+const resolve = asyncHandler(async (req, res) => {
+  const { contribution, resultDoc } = await contributionService.resolveContribution(
+    req.params.id,
+    req.admin._id,
+    req.body
+  );
+  return success(res, { contribution, content: resultDoc ?? null });
+});
+
+module.exports = { list, getById, markUnderReview, approve, reject, resolve };

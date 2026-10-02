@@ -13,15 +13,21 @@
 
 const crypto = require('crypto');
 
+const EXTENSIONS = {
+  'audio/mpeg': '.mp3',
+  'audio/mp4': '.m4a',
+  'audio/x-m4a': '.m4a',
+  'audio/m4a': '.m4a',
+  'audio/aac': '.aac',
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'image/avif': '.avif',
+};
+
 function extensionFor(mimeType) {
-  const map = {
-    'audio/mpeg': '.mp3',
-    'audio/mp4': '.m4a',
-    'audio/x-m4a': '.m4a',
-    'audio/m4a': '.m4a',
-    'audio/aac': '.aac',
-  };
-  return map[mimeType] || '';
+  return EXTENSIONS[mimeType] || '';
 }
 
 let s3Client;
@@ -36,7 +42,7 @@ function getClient() {
 
 /**
  * @param {Buffer} buffer
- * @param {{ mimeType: string, prefix?: string }} opts
+ * @param {{ mimeType: string, prefix?: string, kind?: 'audio' | 'image' }} opts
  * @returns {Promise<{ storageKey: string, url: string }>}
  */
 async function upload(buffer, { mimeType, prefix = 'contributions' }) {

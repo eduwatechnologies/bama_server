@@ -5,6 +5,8 @@ const Category = require('../models/Category');
 const contentService = require('./content.service');
 const { NotFoundError, ValidationError } = require('../utils/errors');
 
+const { isActionable } = Contribution;
+
 const MODEL_BY_TYPE = { word: Word, phrase: Phrase };
 
 async function assertReferencedContentExists(contentType, contentId) {
@@ -17,6 +19,20 @@ async function assertReferencedContentExists(contentType, contentId) {
 }
 
 /**
+ * Works out which report mode produced this payload when the client did not
+ * say, so older builds of the app still land in a filterable bucket.
+ */
+function deriveReportKind(data) {
+  if (data.reportKind) return data.reportKind;
+  if (data.type === 'AUDIO') return 'PRONUNCIATION';
+  if (data.type !== 'CORRECTION') return undefined;
+  if (data.suggestedHausa && !data.suggestedEnglish) return 'TRANSLATION';
+  if (data.suggestedEnglish && !data.suggestedHausa) return 'ENGLISH';
+  if (!data.suggestedEnglish && !data.suggestedHausa) return 'PROBLEM';
+  return undefined; // both halves proposed — not one of the sheet's modes
+}
+
+/**
  * Creates a contribution. Cross-field requirements (e.g. CORRECTION needs
  * contentId + contentType) are enforced by the Zod discriminated union in
  * the validator layer; this only does DB-dependent checks.
@@ -26,10 +42,24 @@ async function createContribution(data) {
     const category = await Category.findById(data.categoryId);
     if (!category) throw new ValidationError('categoryId does not reference an existing category');
   }
-  if (data.contentType && data.contentId) {
-    await assertReferencedContentExists(data.contentType, data.contentId);
+
+  const payload = { ...data };
+  const reportKind = deriveReportKind(payload);
+  if (reportKind) payload.reportKind = reportKind;
+  if (reportKind === 'PROBLEM' && !payload.issueCategory) payload.issueCategory = 'OTHER';
+  if (reportKind !== 'PROBLEM') delete payload.issueCategory;
+
+  if (payload.contentType && payload.contentId) {
+    const referenced = await assertReferencedContentExists(payload.contentType, payload.contentId);
+    payload.contentSnapshot = {
+      english: referenced.english,
+      hausa: referenced.hausa,
+      status: referenced.status,
+      categoryId: referenced.categoryId,
+    };
   }
-  return Contribution.create(data);
+
+  return Contribution.create(payload);
 }
 
 async function getContributionById(id) {
@@ -53,10 +83,43 @@ async function attachAudio(contributionId, audioMeta) {
   return contribution;
 }
 
-async function listContributions({ status, type, page, limit }) {
+/**
+ * Mongo-side equivalent of the `actionable` virtual, so the queue can be
+ * filtered to "publishable" or "needs a moderator decision" in one query.
+ */
+function actionableFilter(actionable) {
+  const filled = { $nin: [null, ''] };
+
+  if (actionable) {
+    return {
+      $or: [
+        { type: { $in: ['WORD', 'PHRASE', 'TRANSLATION'] } },
+        { type: 'CORRECTION', $or: [{ suggestedEnglish: filled }, { suggestedHausa: filled }] },
+        { type: 'AUDIO', 'audio.storageKey': filled },
+      ],
+    };
+  }
+
+  return {
+    type: { $nin: ['WORD', 'PHRASE', 'TRANSLATION'] },
+    $or: [
+      {
+        type: 'CORRECTION',
+        suggestedEnglish: { $in: [null, ''] },
+        suggestedHausa: { $in: [null, ''] },
+      },
+      { type: 'AUDIO', 'audio.storageKey': { $in: [null, ''] } },
+    ],
+  };
+}
+
+async function listContributions({ status, type, reportKind, issueCategory, actionable, page, limit }) {
   const filter = {};
   if (status) filter.status = status;
   if (type) filter.type = type;
+  if (reportKind) filter.reportKind = reportKind;
+  if (issueCategory) filter.issueCategory = issueCategory;
+  if (actionable !== undefined) Object.assign(filter, actionableFilter(actionable));
 
   const [items, total] = await Promise.all([
     Contribution.find(filter)
@@ -84,6 +147,9 @@ async function rejectContribution(id, adminId, reviewNotes) {
   if (contribution.status === 'APPROVED') {
     throw new ValidationError('An already-approved contribution cannot be rejected');
   }
+  if (contribution.status === 'RESOLVED') {
+    throw new ValidationError('A resolved contribution cannot be rejected');
+  }
   contribution.status = 'REJECTED';
   contribution.reviewedBy = adminId;
   contribution.reviewedAt = new Date();
@@ -93,11 +159,59 @@ async function rejectContribution(id, adminId, reviewNotes) {
 }
 
 /**
+ * Closes a contribution without publishing the submitter's wording. Used for
+ * reports that describe a fault instead of proposing text — the moderator
+ * decides the fix, and any content fix is applied here in the same action so
+ * the queue item and the content stay in step.
+ */
+async function resolveContribution(id, adminId, { reviewNotes, english, hausa, categoryId } = {}) {
+  const contribution = await getContributionById(id);
+  if (contribution.status === 'APPROVED') {
+    throw new ValidationError('An already-approved contribution cannot be resolved');
+  }
+  if (contribution.status === 'REJECTED') {
+    throw new ValidationError('A rejected contribution cannot be resolved');
+  }
+  if (contribution.status === 'RESOLVED') {
+    throw new ValidationError('This contribution has already been resolved');
+  }
+
+  const update = {};
+  if (english) update.english = english;
+  if (hausa) update.hausa = hausa;
+  if (categoryId) update.categoryId = categoryId;
+
+  let resultDoc;
+  if (Object.keys(update).length > 0) {
+    requireContentReference(contribution);
+    resultDoc = await contentService.updateContent(
+      contribution.contentType,
+      contribution.contentId,
+      update,
+      adminId
+    );
+  }
+
+  contribution.status = 'RESOLVED';
+  contribution.reviewedBy = adminId;
+  contribution.reviewedAt = new Date();
+  contribution.reviewNotes = reviewNotes;
+  if (resultDoc) contribution.resultContentId = resultDoc._id;
+  await contribution.save();
+
+  return { contribution, resultDoc };
+}
+
+/**
  * Approves a contribution and applies it to official content:
  *   WORD/PHRASE  -> creates a new, published Word/Phrase
  *   TRANSLATION  -> sets hausa translation on the referenced content
- *   CORRECTION   -> applies suggestedEnglish/suggestedHausa to the referenced content
+ *   CORRECTION   -> applies suggestedEnglish/suggestedHausa (and any
+ *                    categoryId override) to the referenced content
  *   AUDIO        -> sets the referenced content's audio to the approved recording
+ *
+ * A report with nothing to publish (a reason-only "Report a problem" entry)
+ * has to be resolved or rejected instead.
  *
  * `overrides` lets the reviewing admin adjust fields (e.g. fix casing,
  * pick a different category) before publishing, without editing the
@@ -111,6 +225,14 @@ async function approveContribution(id, adminId, overrides = {}) {
   }
   if (contribution.status === 'REJECTED') {
     throw new ValidationError('A rejected contribution cannot be approved');
+  }
+  if (contribution.status === 'RESOLVED') {
+    throw new ValidationError('A resolved contribution cannot be approved');
+  }
+  if (!isActionable(contribution)) {
+    throw new ValidationError(
+      'This report describes a problem instead of proposing a change — resolve or reject it'
+    );
   }
 
   let resultDoc;
@@ -150,6 +272,7 @@ async function approveContribution(id, adminId, overrides = {}) {
       const hausa = overrides.hausa ?? contribution.suggestedHausa;
       if (english) update.english = english;
       if (hausa) update.hausa = hausa;
+      if (overrides.categoryId) update.categoryId = overrides.categoryId;
       if (Object.keys(update).length === 0) {
         throw new ValidationError('Correction has no suggested changes to apply');
       }
@@ -204,5 +327,6 @@ module.exports = {
   listContributions,
   markUnderReview,
   rejectContribution,
+  resolveContribution,
   approveContribution,
 };

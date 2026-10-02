@@ -24,6 +24,22 @@ const optionalUrl = z
   )
   .optional();
 
+const imageUrl = z
+  .string()
+  .trim()
+  .url('Must be a valid URL')
+  .max(2000)
+  .refine((value) => /^https?:\/\//i.test(value), 'URL must use http or https');
+
+// Carousel creatives. Kept alongside the legacy single `imageUrl` so existing
+// ads keep working; clients should send both with imageUrl as the first entry.
+const imageUrls = z
+  .preprocess(
+    emptyToUndefined,
+    z.array(imageUrl).max(10, 'A personal ad can carry up to 10 images')
+  )
+  .optional();
+
 const placementSchema = z
   .string()
   .trim()
@@ -50,6 +66,7 @@ const personalAdSchema = z.object({
   title: z.string().trim().min(1, 'Title is required').max(100),
   body: z.string().trim().min(1, 'Body is required').max(500),
   imageUrl: optionalUrl,
+  imageUrls,
   targetUrl: optionalUrl,
   ctaText: z.preprocess(emptyToUndefined, z.string().trim().max(30)).optional(),
 });

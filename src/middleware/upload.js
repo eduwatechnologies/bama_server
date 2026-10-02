@@ -31,4 +31,41 @@ const upload = multer({
 // Single audio file expected under the "audio" field name.
 const audioUpload = upload.single('audio');
 
-module.exports = { audioUpload, ALLOWED_MIME_TYPES, MAX_AUDIO_BYTES };
+// Images are used for personal ad creatives. Raster formats only, and kept
+// small because the mobile client downloads them with the ad payload.
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/avif',
+]);
+
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3MB
+
+const imageUploader = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_IMAGE_BYTES, files: 1 },
+  fileFilter(req, file, cb) {
+    if (!ALLOWED_IMAGE_MIME_TYPES.has(file.mimetype)) {
+      return cb(
+        new ValidationError(
+          `Unsupported image format: ${file.mimetype}. Use JPEG, PNG, WebP, GIF, or AVIF.`
+        )
+      );
+    }
+    return cb(null, true);
+  },
+});
+
+// Single image file expected under the "image" field name.
+const imageUpload = imageUploader.single('image');
+
+module.exports = {
+  audioUpload,
+  imageUpload,
+  ALLOWED_MIME_TYPES,
+  ALLOWED_IMAGE_MIME_TYPES,
+  MAX_AUDIO_BYTES,
+  MAX_IMAGE_BYTES,
+};
