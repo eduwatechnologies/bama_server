@@ -2,6 +2,8 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const mongoSanitize = require('express-mongo-sanitize');
+// Required by the commented-out pinoHttp block below; keep it here so that
+// block can be re-enabled without touching the imports.
 const pinoHttp = require('pino-http');
 
 const env = require('./config/env');
@@ -38,15 +40,20 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 // prevent MongoDB operator injection.
 app.use(mongoSanitize());
 
-app.use(
-  pinoHttp({
-    logger,
-    redact: ['req.headers.authorization'],
-    autoLogging: {
-      ignore: (req) => req.url === '/health',
-    },
-  })
-);
+// Verbose per-request logging. Commented out because it dumps the full
+// req/res object (headers, etag, CSP, rate-limit counters) for every call and
+// buries the warnings that actually matter. Application errors are still
+// logged by errorHandler.js, which uses the logger directly.
+//
+// app.use(
+//   pinoHttp({
+//     logger,
+//     redact: ['req.headers.authorization'],
+//     autoLogging: {
+//       ignore: (req) => req.url === '/health',
+//     },
+//   })
+// );
 
 app.get('/health', (req, res) => success(res, { status: 'ok', uptime: process.uptime() }));
 
