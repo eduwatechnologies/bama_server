@@ -35,4 +35,7 @@ router.get(
   controller.getCategoryContent
 );
 
+// Public languages endpoint for mobile app
+router.get('/languages', standardLimiter, controller.listLanguages);
+
 module.exports = router;

@@ -12,6 +12,7 @@ const contributionsController = require('../controllers/admin/contributions.cont
 const audioController = require('../controllers/admin/audio.controller');
 const imagesController = require('../controllers/admin/images.controller');
 const adsController = require('../controllers/admin/ads.controller');
+const languagesController = require('../controllers/admin/languages.controller');
 
 const { loginSchema, refreshSchema } = require('../validators/admin.validators');
 const {
@@ -40,6 +41,7 @@ const {
 } = require('../validators/ad.validators');
 const { adminAudioUploadQuery } = require('../validators/common');
 const { audioUpload, imageUpload } = require('../middleware/upload');
+const { createLanguageSchema, updateLanguageSchema, languageCodeParamSchema } = require('../validators/language.validators');
 
 const router = express.Router();
 
@@ -118,6 +120,28 @@ router.patch(
   requireRole('SUPER_ADMIN', 'ADMIN'),
   validate({ params: idParamSchema, body: updateCategorySchema }),
   categoriesController.updateCategory
+);
+
+// ---- Languages ----
+router.get('/languages', languagesController.listLanguages);
+router.get('/languages/:code', validate({ params: languageCodeParamSchema }), languagesController.getLanguage);
+router.post(
+  '/languages',
+  requireRole('SUPER_ADMIN', 'ADMIN'),
+  validate({ body: createLanguageSchema }),
+  languagesController.createLanguage
+);
+router.patch(
+  '/languages/:code',
+  requireRole('SUPER_ADMIN', 'ADMIN'),
+  validate({ params: languageCodeParamSchema, body: updateLanguageSchema }),
+  languagesController.updateLanguage
+);
+router.delete(
+  '/languages/:code',
+  requireRole('SUPER_ADMIN', 'ADMIN'),
+  validate({ params: languageCodeParamSchema }),
+  languagesController.deleteLanguage
 );
 
 router.get('/ads', validate({ query: listAdsQuerySchema }), adsController.list);

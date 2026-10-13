@@ -208,7 +208,9 @@ async function resolveContribution(id, adminId, { reviewNotes, english, hausa, c
  *   TRANSLATION  -> sets hausa translation on the referenced content
  *   CORRECTION   -> applies suggestedEnglish/suggestedHausa (and any
  *                    categoryId override) to the referenced content
- *   AUDIO        -> sets the referenced content's audio to the approved recording
+ *   AUDIO        -> merges the approved recording into the referenced content's
+ *                   per-language audio map under `contribution.language` (default
+ *                   'ha'), preserving recordings already stored under other languages
  *
  * A report with nothing to publish (a reason-only "Report a problem" entry)
  * has to be resolved or rejected instead.
@@ -290,10 +292,22 @@ async function approveContribution(id, adminId, overrides = {}) {
       if (!contribution.audio || !contribution.audio.storageKey) {
         throw new ValidationError('This contribution has no uploaded audio to approve');
       }
+
+      // Merge the recording into the per-language audio map instead of
+      // replacing the whole map. Approving a pronunciation for one language
+      // must not wipe out recordings already stored under other languages.
+      const language = contribution.language || 'ha';
+      const existingDoc = await contentService.getContentById(
+        contribution.contentType,
+        contribution.contentId
+      );
+      const existingAudio = (existingDoc && existingDoc.audio) || {};
+      const mergedAudio = { ...existingAudio, [language]: contribution.audio };
+
       resultDoc = await contentService.updateContent(
         contribution.contentType,
         contribution.contentId,
-        { audio: contribution.audio },
+        { audio: mergedAudio },
         adminId
       );
       break;

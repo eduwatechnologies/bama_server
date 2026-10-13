@@ -3,40 +3,53 @@ const { objectId, paginationQuery } = require('./common');
 const { CONTENT_STATUSES } = require('../models/Word');
 const { CATEGORY_STATUSES } = require('../models/Category');
 
-const exampleSentenceSchema = z
+/**
+ * Translations object: English (en) is required, other languages optional.
+ * Keys are language codes (e.g., en, ha, yo, ig).
+ */
+const translationsSchema = z
   .object({
-    english: z.string().trim().max(500).optional(),
-    hausa: z.string().trim().max(500).optional(),
+    en: z.string().trim().min(1, 'English text is required').max(500),
   })
-  .optional();
+  .passthrough(); // Allow additional language keys
 
-const audioSchema = z
-  .object({
-    url: z.string().trim().url().optional(),
-    storageKey: z.string().trim().optional(),
-    mimeType: z.string().trim().optional(),
-    size: z.number().nonnegative().optional(),
-    duration: z.number().nonnegative().optional(),
-  })
+/**
+ * Example sentences per language.
+ * Keys are language codes.
+ */
+const exampleSentenceSchema = z.record(z.string().trim().max(500)).optional();
+
+/**
+ * Audio map per language.
+ * Keys are language codes, values are audio metadata.
+ */
+const audioMapSchema = z
+  .record(
+    z.object({
+      url: z.string().trim().url().optional(),
+      storageKey: z.string().trim().optional(),
+      mimeType: z.string().trim().optional(),
+      size: z.number().nonnegative().optional(),
+      duration: z.number().nonnegative().optional(),
+    })
+  )
   .optional();
 
 const createWordSchema = z.object({
-  english: z.string().trim().min(1, 'English text is required').max(200),
-  hausa: z.string().trim().min(1, 'Hausa translation is required').max(200),
+  translations: translationsSchema,
   description: z.string().trim().max(1000).optional(),
   categoryId: objectId('categoryId'),
   exampleSentence: exampleSentenceSchema,
-  audio: audioSchema,
+  audio: audioMapSchema,
   status: z.enum(CONTENT_STATUSES).optional(),
 });
 
 const updateWordSchema = createWordSchema.partial();
 
 const createPhraseSchema = z.object({
-  english: z.string().trim().min(1, 'English text is required').max(500),
-  hausa: z.string().trim().min(1, 'Hausa translation is required').max(500),
+  translations: translationsSchema,
   categoryId: objectId('categoryId'),
-  audio: audioSchema,
+  audio: audioMapSchema,
   status: z.enum(CONTENT_STATUSES).optional(),
 });
 

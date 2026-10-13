@@ -52,6 +52,11 @@ const audioContribution = z.object({
   contentType: z.enum(CONTENT_TYPES),
   contentId: objectId('contentId'),
   notes: z.string().trim().max(1000).optional(),
+  // Which language this recording pronounces. Sent by the mobile app from
+  // the user's selected target language at record time. Without it an approved
+  // AUDIO contribution cannot be merged into the per-language audio map
+  // without clobbering the other languages' recordings.
+  language: z.string().trim().toLowerCase().min(2).max(3).optional(),
   installationId,
   ...reportFields,
 });

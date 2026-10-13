@@ -56,6 +56,12 @@ const contributionSchema = new mongoose.Schema(
     contentType: { type: String, enum: CONTENT_TYPES },
     contentId: { type: mongoose.Schema.Types.ObjectId, refPath: 'contentTypeModel' },
 
+    // AUDIO — which language the recording pronounces. The mobile app knows
+    // this from the user's selected target language at record time. Without it
+    // an approved AUDIO contribution cannot be merged into the per-language
+    // audio map without clobbering the other languages' recordings.
+    language: { type: String, trim: true, lowercase: true },
+
     // The referenced content as it looked when the report was filed, so the
     // queue stays meaningful after that content is edited or archived.
     contentSnapshot: { type: contentSnapshotSchema, default: undefined },

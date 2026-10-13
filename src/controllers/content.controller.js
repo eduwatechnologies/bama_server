@@ -1,6 +1,7 @@
 const asyncHandler = require('../middleware/asyncHandler');
 const { success } = require('../utils/apiResponse');
 const Category = require('../models/Category');
+const Language = require('../models/Language');
 const contentService = require('../services/content.service');
 const { NotFoundError } = require('../utils/errors');
 
@@ -63,10 +64,18 @@ const getCategoryContent = asyncHandler(async (req, res) => {
   return success(res, { category, ...results }, 200, { page, limit });
 });
 
+// GET /api/v1/languages
+// Public endpoint for mobile app to fetch available languages
+const listLanguages = asyncHandler(async (req, res) => {
+  const languages = await Language.find({ isActive: true }).sort({ order: 1, code: 1 });
+  return success(res, languages);
+});
+
 module.exports = {
   listContent,
   getContentById,
   searchContent,
   listCategories,
   getCategoryContent,
+  listLanguages,
 };

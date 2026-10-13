@@ -13,22 +13,39 @@ const audioSchema = new mongoose.Schema(
   { _id: false }
 );
 
-const exampleSentenceSchema = new mongoose.Schema(
+/**
+ * Per-language audio map. Keys are language codes (e.g., 'en', 'ha', 'yo').
+ * Using strict: false to allow dynamic language fields.
+ */
+const audioMapSchema = new mongoose.Schema({}, { _id: false, strict: false });
+
+/**
+ * Translations map. Keys are language codes.
+ * English ('en') is required as the base language.
+ * Using strict: false to allow dynamic language fields.
+ */
+const translationsSchema = new mongoose.Schema(
   {
-    english: { type: String, trim: true, maxlength: 500 },
-    hausa: { type: String, trim: true, maxlength: 500 },
+    en: { type: String, required: true, trim: true, maxlength: 200 },
   },
-  { _id: false }
+  { _id: false, strict: false }
 );
+
+/**
+ * Example sentences per language.
+ * Using strict: false to allow dynamic language fields.
+ */
+const exampleSentenceSchema = new mongoose.Schema({}, { _id: false, strict: false });
 
 const wordSchema = new mongoose.Schema(
   {
-    english: { type: String, required: true, trim: true, maxlength: 200 },
-    hausa: { type: String, required: true, trim: true, maxlength: 200 },
+    /** Translations keyed by language code (e.g., { en: 'Water', ha: 'Ruwa', yo: 'Omi' }) */
+    translations: { type: translationsSchema, required: true },
     description: { type: String, trim: true, maxlength: 1000 },
     categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
     exampleSentence: { type: exampleSentenceSchema, default: undefined },
-    audio: { type: audioSchema, default: undefined },
+    /** Audio URLs keyed by language code (e.g., { en: null, ha: 'url', yo: 'url' }) */
+    audio: { type: audioMapSchema, default: {} },
     status: { type: String, enum: CONTENT_STATUSES, default: 'DRAFT' },
     // Global content version this record was last touched at. Used by
     // the sync endpoint to compute incremental changes.
@@ -39,9 +56,25 @@ const wordSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-wordSchema.index({ english: 'text', hausa: 'text', description: 'text' });
+// Text index on all translation fields - we index the 'en' field for now
+// Additional languages can be added to the index as needed
+wordSchema.index({ 'translations.en': 'text', description: 'text' });
 wordSchema.index({ status: 1, version: 1 });
 wordSchema.index({ categoryId: 1, status: 1 });
+
+// Virtual for backward compatibility - returns English translation
+wordSchema.virtual('english').get(function () {
+  return this.translations?.en ?? '';
+});
+
+// Virtual for backward compatibility - returns Hausa translation
+wordSchema.virtual('hausa').get(function () {
+  return this.translations?.ha ?? '';
+});
+
+// Ensure virtuals are included in JSON output
+wordSchema.set('toJSON', { virtuals: true });
+wordSchema.set('toObject', { virtuals: true });
 
 module.exports = mongoose.model('Word', wordSchema);
 module.exports.CONTENT_STATUSES = CONTENT_STATUSES;
