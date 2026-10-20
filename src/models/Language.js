@@ -14,6 +14,7 @@ const languageSchema = new mongoose.Schema(
     nativeName: { type: String, required: true, trim: true, maxlength: 50 },
     isRTL: { type: Boolean, default: false },
     flag: { type: String, trim: true, maxlength: 10 },
+    isBase: { type: Boolean, default: false },
     isActive: { type: Boolean, default: false },
     order: { type: Number, default: 0 },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
@@ -25,9 +26,9 @@ const languageSchema = new mongoose.Schema(
 languageSchema.index({ isActive: 1, order: 1 });
 languageSchema.index({ code: 1 }, { unique: true });
 
-// Ensure English (base language) always exists and is active
 languageSchema.pre('save', async function (next) {
   if (this.code === 'en') {
+    this.isBase = true;
     this.isActive = true;
     this.order = 0;
   }

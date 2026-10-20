@@ -28,6 +28,7 @@ const createLanguage = asyncHandler(async (req, res) => {
     nativeName,
     isRTL: isRTL ?? false,
     flag: flag ?? '',
+    isBase: req.body.isBase ?? false,
     isActive: isActive ?? false,
     order: order ?? 0,
     createdBy: req.admin._id,
@@ -55,11 +56,15 @@ const updateLanguage = asyncHandler(async (req, res) => {
   if (language.code === 'en' && isActive === false) {
     throw new ValidationError('Cannot deactivate the base language (English)');
   }
+  if (language.code === 'en' && req.body.isBase === false) {
+    throw new ValidationError('Cannot change base status of the base language (English)');
+  }
 
   if (name !== undefined) language.name = name;
   if (nativeName !== undefined) language.nativeName = nativeName;
   if (isRTL !== undefined) language.isRTL = isRTL;
   if (flag !== undefined) language.flag = flag;
+  if (req.body.isBase !== undefined) language.isBase = req.body.isBase;
   if (isActive !== undefined) language.isActive = isActive;
   if (order !== undefined) language.order = order;
 

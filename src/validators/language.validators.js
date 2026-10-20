@@ -28,6 +28,7 @@ const createLanguageSchema = z.object({
   nativeName: z.string().trim().min(1).max(50),
   isRTL: z.boolean().default(false),
   flag: z.string().trim().max(10).default(''),
+  isBase: z.boolean().default(false),
   isActive: z.boolean().default(false),
   order: z.number().int().min(0).default(0),
 });
@@ -41,6 +42,7 @@ const updateLanguageSchema = z
     nativeName: z.string().trim().min(1).max(50).optional(),
     isRTL: z.boolean().optional(),
     flag: z.string().trim().max(10).optional(),
+    isBase: z.boolean().optional(),
     isActive: z.boolean().optional(),
     order: z.number().int().min(0).optional(),
   })
