@@ -1,6 +1,7 @@
 const { z } = require('zod');
 const { objectId, paginationQuery } = require('./common');
 const { AD_TYPES, AD_STATUSES, GOOGLE_AD_FORMATS } = require('../models/Ad');
+const { AD_EVENT_TYPES } = require('../models/AdEvent');
 
 const emptyToUndefined = (value) =>
   value === '' || value === null || value === undefined ? undefined : value;
@@ -136,6 +137,8 @@ const listAdsQuerySchema = paginationQuery.extend({
   status: z.enum(AD_STATUSES).optional(),
   placement: placementSchema.optional(),
   q: z.preprocess(emptyToUndefined, z.string().trim().max(100)).optional(),
+  from: optionalDate,
+  to: optionalDate,
 });
 
 const publicAdsQuerySchema = z.object({
@@ -144,10 +147,35 @@ const publicAdsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(20).default(20),
 });
 
+const adEventSchema = z.object({
+  adId: objectId('adId'),
+  type: z.enum(AD_EVENT_TYPES),
+  placement: placementSchema.optional(),
+  targetUrl: optionalUrl,
+  at: z.coerce.date().optional(),
+});
+
+const adEventBatchSchema = z.object({
+  installationId: z.string().trim().min(1, 'installationId is required').max(100),
+  platform: z.preprocess(emptyToUndefined, z.string().trim().max(20)).optional(),
+  appVersion: z.preprocess(emptyToUndefined, z.string().trim().max(30)).optional(),
+  events: z
+    .array(adEventSchema)
+    .min(1, 'At least one event is required')
+    .max(20, 'A batch can carry up to 20 events'),
+});
+
+const adStatsQuerySchema = z.object({
+  from: optionalDate,
+  to: optionalDate,
+});
+
 module.exports = {
   createAdSchema,
   updateAdSchema,
   idParamSchema,
   listAdsQuerySchema,
   publicAdsQuerySchema,
+  adEventBatchSchema,
+  adStatsQuerySchema,
 };

@@ -14,4 +14,31 @@ const syncQuerySchema = z.object({
   installationId: z.string().trim().min(8).max(100).optional(),
 });
 
-module.exports = { registerInstallationSchema, syncQuerySchema };
+// Learning-path progress backup. Every field is optional so a client can push a
+// partial snapshot; the server merges instead of overwriting.
+const progressUpdateSchema = z.object({
+  installationId: z.string().trim().min(8).max(100),
+  learnedWordIds: z.array(z.string().trim().min(1).max(100)).max(10000).optional(),
+  currentStreak: z.coerce.number().int().min(0).max(1000000).optional(),
+  longestStreak: z.coerce.number().int().min(0).max(1000000).optional(),
+  lastLearnedDate: z.preprocess(
+    (value) => (value === '' || value === null ? undefined : value),
+    z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD')
+      .optional()
+  ),
+  dailyGoal: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+const progressQuerySchema = z.object({
+  installationId: z.string().trim().min(8).max(100),
+});
+
+module.exports = {
+  registerInstallationSchema,
+  syncQuerySchema,
+  progressUpdateSchema,
+  progressQuerySchema,
+};

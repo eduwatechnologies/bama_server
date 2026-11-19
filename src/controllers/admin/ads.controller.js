@@ -12,6 +12,11 @@ const get = asyncHandler(async (req, res) => {
   return success(res, ad);
 });
 
+const stats = asyncHandler(async (req, res) => {
+  const result = await adService.getAdStats(req.params.id, req.query);
+  return success(res, result);
+});
+
 const create = asyncHandler(async (req, res) => {
   const ad = await adService.createAd(req.body, req.admin._id);
   return success(res, ad, 201);
@@ -27,4 +32,4 @@ const archive = asyncHandler(async (req, res) => {
   return success(res, ad);
 });
 
-module.exports = { list, get, create, update, archive };
+module.exports = { list, get, create, update, archive, stats };

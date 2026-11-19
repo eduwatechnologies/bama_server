@@ -38,6 +38,7 @@ const {
   updateAdSchema,
   idParamSchema: adIdParamSchema,
   listAdsQuerySchema,
+  adStatsQuerySchema,
 } = require('../validators/ad.validators');
 const { adminAudioUploadQuery } = require('../validators/common');
 const { audioUpload, imageUpload } = require('../middleware/upload');
@@ -145,6 +146,11 @@ router.delete(
 );
 
 router.get('/ads', validate({ query: listAdsQuerySchema }), adsController.list);
+router.get(
+  '/ads/:id/stats',
+  validate({ params: adIdParamSchema, query: adStatsQuerySchema }),
+  adsController.stats
+);
 router.get('/ads/:id', validate({ params: adIdParamSchema }), adsController.get);
 router.post(
   '/ads',

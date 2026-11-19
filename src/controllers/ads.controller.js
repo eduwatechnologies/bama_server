@@ -7,4 +7,9 @@ const list = asyncHandler(async (req, res) => {
   return success(res, ads);
 });
 
-module.exports = { list };
+const trackEvents = asyncHandler(async (req, res) => {
+  const result = await adService.recordAdEvents(req.body);
+  return success(res, result, 202);
+});
+
+module.exports = { list, trackEvents };

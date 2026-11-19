@@ -1,8 +1,24 @@
+const mongoose = require('mongoose');
 const Ad = require('../models/Ad');
+const AdEvent = require('../models/AdEvent');
 require('../models/Admin');
 const { NotFoundError, ValidationError } = require('../utils/errors');
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function rangeMatch({ from, to } = {}) {
+  if (!from && !to) return {};
+  const occurredAt = {};
+  if (from) occurredAt.$gte = from;
+  if (to) occurredAt.$lte = to;
+  return { occurredAt };
+}
+
+function summarizeCounts(countsByType) {
+  const impressions = countsByType.IMPRESSION ?? 0;
+  const clicks = countsByType.CLICK ?? 0;
+  return { impressions, clicks, ctr: impressions > 0 ? clicks / impressions : 0 };
+}
 
 function adminFilter({ type, status, placement, q }) {
   const filter = {};
@@ -87,7 +103,7 @@ function assertProviderPayload(data) {
   }
 }
 
-async function listAds({ type, status, placement, q, page, limit }) {
+async function listAds({ type, status, placement, q, page, limit, from, to }) {
   const filter = adminFilter({ type, status, placement, q });
   const [items, total] = await Promise.all([
     Ad.find(filter)
@@ -98,7 +114,18 @@ async function listAds({ type, status, placement, q, page, limit }) {
       .limit(limit),
     Ad.countDocuments(filter),
   ]);
-  return { items, total };
+  const statsMap = await getAdsStats(
+    items.map((ad) => ad._id.toString()),
+    { from, to }
+  );
+  const itemsWithMetrics = items.map((ad) => {
+    const plain = ad.toObject();
+    return {
+      ...plain,
+      metrics: statsMap[plain._id.toString()] ?? { impressions: 0, clicks: 0, ctr: 0 },
+    };
+  });
+  return { items: itemsWithMetrics, total };
 }
 
 async function getAd(id) {
@@ -165,6 +192,107 @@ async function listPublicAds({ type, placement, limit }) {
   return ads.map(toPublicAd);
 }
 
+/**
+ * Persists a batch of client-reported ad interactions. Unknown ad ids are
+ * dropped rather than failing the whole batch so a stale client cannot
+ * poison otherwise-valid events.
+ */
+async function recordAdEvents({ installationId, platform, appVersion, events }) {
+  const adIds = [...new Set(events.map((event) => event.adId))];
+  const known = await Ad.find({ _id: { $in: adIds } }).select('_id');
+  const knownIds = new Set(known.map((ad) => ad._id.toString()));
+
+  const docs = events
+    .filter((event) => knownIds.has(event.adId))
+    .map((event) => ({
+      adId: event.adId,
+      type: event.type,
+      placement: event.placement,
+      installationId,
+      platform,
+      appVersion,
+      targetUrl: event.targetUrl,
+      ...(event.at ? { occurredAt: event.at } : {}),
+    }));
+
+  if (docs.length === 0) return { accepted: 0 };
+  await AdEvent.insertMany(docs, { ordered: false });
+  return { accepted: docs.length };
+}
+
+/**
+ * Aggregated performance for one ad: totals, CTR, unique installations, and a
+ * per-day time series of impressions and clicks.
+ */
+async function getAdStats(adId, range = {}) {
+  const match = { adId: new mongoose.Types.ObjectId(adId), ...rangeMatch(range) };
+  const [byType, byDay, installs] = await Promise.all([
+    AdEvent.aggregate([{ $match: match }, { $group: { _id: '$type', count: { $sum: 1 } } }]),
+    AdEvent.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: {
+            date: { $dateToString: { format: '%Y-%m-%d', date: '$occurredAt' } },
+            type: '$type',
+          },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { '_id.date': 1 } },
+    ]),
+    AdEvent.distinct('installationId', match),
+  ]);
+
+  const countsByType = Object.fromEntries(byType.map((row) => [row._id, row.count]));
+  const summary = summarizeCounts(countsByType);
+
+  const seriesByDate = new Map();
+  for (const row of byDay) {
+    const entry = seriesByDate.get(row._id.date) ?? {
+      date: row._id.date,
+      impressions: 0,
+      clicks: 0,
+    };
+    if (row._id.type === 'IMPRESSION') entry.impressions += row.count;
+    else if (row._id.type === 'CLICK') entry.clicks += row.count;
+    seriesByDate.set(row._id.date, entry);
+  }
+
+  return {
+    adId,
+    ...summary,
+    uniqueInstallations: installs.filter(Boolean).length,
+    series: [...seriesByDate.values()],
+  };
+}
+
+/** Rollup for many ads at once, keyed by ad id, used by the admin list. */
+async function getAdsStats(adIds, range = {}) {
+  if (adIds.length === 0) return {};
+  const match = {
+    adId: { $in: adIds.map((id) => new mongoose.Types.ObjectId(id)) },
+    ...rangeMatch(range),
+  };
+  const rows = await AdEvent.aggregate([
+    { $match: match },
+    { $group: { _id: { adId: '$adId', type: '$type' }, count: { $sum: 1 } } },
+  ]);
+
+  const map = {};
+  for (const id of adIds) map[id] = { impressions: 0, clicks: 0, ctr: 0 };
+  for (const row of rows) {
+    const entry = map[row._id.adId.toString()];
+    if (!entry) continue;
+    if (row._id.type === 'IMPRESSION') entry.impressions += row.count;
+    else if (row._id.type === 'CLICK') entry.clicks += row.count;
+  }
+  for (const entry of Object.values(map)) {
+    entry.ctr = entry.impressions > 0 ? entry.clicks / entry.impressions : 0;
+  }
+  return map;
+}
+
 module.exports = {
   listAds,
   getAd,
@@ -172,4 +300,7 @@ module.exports = {
   updateAd,
   archiveAd,
   listPublicAds,
+  recordAdEvents,
+  getAdStats,
+  getAdsStats,
 };
