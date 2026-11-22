@@ -13,6 +13,7 @@ const audioController = require('../controllers/admin/audio.controller');
 const imagesController = require('../controllers/admin/images.controller');
 const adsController = require('../controllers/admin/ads.controller');
 const languagesController = require('../controllers/admin/languages.controller');
+const appSettingsController = require('../controllers/admin/appSettings.controller');
 
 const { loginSchema, refreshSchema } = require('../validators/admin.validators');
 const {
@@ -43,6 +44,7 @@ const {
 const { adminAudioUploadQuery } = require('../validators/common');
 const { audioUpload, imageUpload } = require('../middleware/upload');
 const { createLanguageSchema, updateLanguageSchema, languageCodeParamSchema } = require('../validators/language.validators');
+const { updateAppUpdateSchema } = require('../validators/appSettings.validators');
 
 const router = express.Router();
 
@@ -143,6 +145,15 @@ router.delete(
   requireRole('SUPER_ADMIN', 'ADMIN'),
   validate({ params: languageCodeParamSchema }),
   languagesController.deleteLanguage
+);
+
+// ---- App settings (in-app update gate) ----
+router.get('/app-settings', appSettingsController.getSettings);
+router.patch(
+  '/app-settings/app-update',
+  requireRole('SUPER_ADMIN', 'ADMIN'),
+  validate({ body: updateAppUpdateSchema }),
+  appSettingsController.updateAppUpdate
 );
 
 router.get('/ads', validate({ query: listAdsQuerySchema }), adsController.list);

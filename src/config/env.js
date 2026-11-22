@@ -25,6 +25,23 @@ const env = {
 
   isProd: (process.env.NODE_ENV || 'development') === 'production',
 
+  // In-app update gate seed values, used only to create the AppSettings
+  // document on first access. After that the dashboard is the source of truth:
+  //   latestVersion — shows a dismissible "update available" prompt when the
+  //     installed version is older than this.
+  //   minVersion — blocks the app when the installed version is older.
+  // Defaults are safe: latest = current release version, min = 0.0.0, so no
+  // prompt appears until the values are raised.
+  appUpdate: {
+    enabled: (process.env.APP_UPDATE_ENABLED || 'true') !== 'false',
+    latestVersion: process.env.APP_LATEST_VERSION || '1.0.0',
+    minVersion: process.env.APP_MIN_VERSION || '0.0.0',
+    storeUrl:
+      process.env.APP_STORE_URL ||
+      'https://play.google.com/store/apps/details?id=com.sodiqabdulazeez.hausabridge',
+    message: process.env.APP_UPDATE_MESSAGE || '',
+  },
+
   storage: {
     driver: process.env.STORAGE_DRIVER || 'local',
     local: {

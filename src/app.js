@@ -16,6 +16,7 @@ const syncRoutes = require('./routes/sync.routes');
 const installationRoutes = require('./routes/installation.routes');
 const contributionRoutes = require('./routes/contribution.routes');
 const adsRoutes = require('./routes/ads.routes');
+const versionRoutes = require('./routes/version.routes');
 const adminRoutes = require('./routes/admin.routes');
 const storage = require('./services/storage');
 
@@ -70,6 +71,7 @@ app.use('/api/v1', syncRoutes);
 app.use('/api/v1', installationRoutes);
 app.use('/api/v1', contributionRoutes);
 app.use('/api/v1', adsRoutes);
+app.use('/api/v1', versionRoutes);
 app.use('/api/v1/admin', adminRoutes);
 
 app.use(notFoundHandler);
